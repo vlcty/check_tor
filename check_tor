@@ -1,0 +1,103 @@
+#!/usr/bin/perl
+#
+# check_tor - Check if your TOR instance is still connected to the network
+# Copyright (C) 2015  Josef 'veloc1ty' Stautner (hello@veloc1ty.de)
+#
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+use strict;
+use warnings;
+use Getopt::Long;
+use LWP::UserAgent;
+use HTTP::Status;
+use Time::HiRes qw(time);
+
+our $TOR_HOST = '127.0.0.1';
+our $TOR_PORT = 9050;
+our $TARGET = 'https://www.torproject.org';
+
+main();
+
+sub main {
+	parse_options();
+	fetchTarget();
+}
+
+sub fetchTarget {
+	my $userAgent = LWP::UserAgent->new(
+		agent => 'check_tor connection check'
+	);
+
+	$userAgent->proxy(
+		['http', 'https'],
+		"socks://$TOR_HOST:$TOR_PORT"
+		);
+	$userAgent->timeout(10);
+
+	my $startTime = time;
+
+	decide_exit_code($userAgent->head($TARGET),
+		$startTime);
+}
+
+sub decide_exit_code {
+	my ( $response, $startTime ) = @_;
+	my $delay = calculate_delay($startTime);
+	$delay = build_latency_string($delay);
+
+	if ( $response->is_success ) {
+		print("OK - TOR connection is up" . $delay);
+		exit 0;
+	}
+	elsif ( $response->code == HTTP::Status::HTTP_REQUEST_TIMEOUT) {
+		print("WARNING - Request timed out" . $delay);
+		exit 1;
+	}
+	elsif ( $response->is_error ) {
+		print("CRITICAL - TOR connection is down" . $delay);
+		exit 2;
+	}
+	else {
+		exit_unknown("Was not able to determine state" . $delay);
+	}
+}
+
+sub build_latency_string {
+	my $delay = shift;
+	return "|latency=" . $delay . "ms\n";
+}
+
+sub calculate_delay {
+	my $startTime = shift;
+	return sprintf("%.4f", ( time - $startTime ) * 1000 );
+}
+
+sub parse_options {
+	GetOptions (
+		"host=s" => \$TOR_HOST,
+		"port=i" => \$TOR_PORT,
+		"target=s" => \$TARGET,
+		);
+
+	exit_unknown("--host argument is invalid") if ( length($TOR_HOST) == 0);
+	exit_unknown("--target argument is invalid") if ( length($TARGET) == 0);
+	exit_unknown("--port argument is invalid") if ( $TOR_PORT <= 0 || $TOR_PORT > 65535 );
+}
+
+sub exit_unknown {
+	my $errorMessage = shift;
+	print("$errorMessage\n");
+	exit 3;
+}
+
