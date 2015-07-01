@@ -56,10 +56,7 @@ The check has then to be done via by_ssh as check command or through an icinga d
 I have this setup at home. For my LAN I've defined the address range 192.168.0.0/24.
 
 TOR-Server has the IP 192.168.0.250
-
 Icinga-Server has the IP: 192.168.0.247
-
-The `check_tor`-File is only on the icinga server but has to connect to the TOR-server.
 
 My tor config file looks like this:
 ```
@@ -82,9 +79,8 @@ In this case my icinga daemon can execute the check locally.
 
 #### Step 4.1: Create a CheckCommand object
 
-Navigate on your Icinga 2 server to your config folder, e.g.: `/etc/icinga2/conf.d`.
-
-Place this block of code into it:
+Navigate on your Icinga 2 server to your config folder, e.g.: `/etc/icinga2/conf.d` and open the `commands.conf` file.
+Place this piece of code into it:
 
 ```
 object CheckCommand "tor" {
@@ -99,8 +95,6 @@ object CheckCommand "tor" {
         }
 }
 ```
-
-Adjust `command` according to the path in your system if you didn't place the script in `/usr/lib/nagios/plugins`!
 
 #### Step 4.2: Add check to a host
 
@@ -122,13 +116,13 @@ object Service "tor" {
 }
 ```
 
-Possible values are:
+Possible variable values are:
 
 * tor_host = The address (hostname or IP) of the TOR daemon (optional, default: 127.0.0.1)
 * tor_port = The port where the TOR daemon listens (optional, default: 9050)
 * tor_target = The target site (optional, default: https://www.torproject.org)
 
-See Step 3 to check if you have to set tor_host or tor_port depending on your setup.
+See step 3 to check if you have to set tor_host or tor_port depending on your setup.
 
 If you want to add it to multiple hosts work with `apply`!
 
