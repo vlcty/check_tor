@@ -2,16 +2,23 @@
 
 ## What is it
 
-This is a plugin for Nagios / Icinga to monitor the connection of your TOR daemon to the TOR network.
+This is a plugin for Nagios / Icinga to monitor the connection of your TOR deamon.
 
 ## What it does
 
-The plugin tries to fetch a web page over the TOR network via the SOCKS interface. The default queried site is `https://www.torproject.org`. Basically a HTTP HEAD request is sent. This is enough because the returned content is irrelevant. I do this to take away unnecessary network load from the TOR network.
+This plugin tries to fetch a web page (or an .onion hidden service) over the TOR network.
+
+## How it works
+
+Via the `LWP` perl library a HTTP HEAD request is done over TOR's SOCKS interface. The default queried site is `https://www.torproject.org`. Of course you can set your own target. See section 4.2 for more info.
 
 ## How to install
 ### Step 1: Get the script
 
-Fetch the script and place it in your PluginDir-Folder. That's usually `/usr/lib/nagios/plugins`
+__Warning: This instructions only apply to Icinga 2__
+
+Fetch the script and place it in your `PluginDir`-Folder. That's usually `/usr/lib/nagios/plugins`.
+If you are not sure about the value of `PluginDir` you can check `/etc/icinga2/constants.conf`.
 
 ### Step 2: Install dependencies
 
@@ -21,24 +28,22 @@ Furthermore we need two more perl libraries:
 - LWP::UserAgent
 - LWP::Protocol::socks
 
-If you use `apt` you can simply install it via
-
-```apt-get install liblwp-protocol-socks-perl```
+If you use `apt` you can simply install it via `apt-get install liblwp-protocol-socks-perl`
 
 Another (package manager independant) way is via CPAN. Your choice!
 
 ### Step 3: Configure TOR daemon
 
-To allow fetching a site via TOR you have to allow SOCKS requests to the TOR daemon.
-The settings depend on your setup.
+Before someone can use the SOCKS interface of the TOR daemon you have to allow that explicitly!
+The following setups are done in the TOR config file (Normally `/etc/tor/torrc`).
 
 #### Setup 1: Running the script on the same system as TOR
 
 In a perfect environment your TOR client is not listening for SOCKS connections. Well, we need this feature. In this scenario the
-script is on the same server as the TOR daemon. The most secure way is listening only on 127.0.0.1:9050 and only allow 127.0.0.1
-to send SOCKS requests.
+script is on the same server as the TOR daemon. The most secure way is listening only on 127.0.0.1:9050 and only allow 127.0.0.1/32
+to connect to the SOCKS interface.
 
-Your tor config file should look like this:
+Your TOR config file should look like this:
 ```
 [...]
 SocksPort 127.0.0.1:9050
@@ -73,13 +78,13 @@ SocksPolicy reject *
 
 I'm allowing every client on my LAN to make SOCKS requests to the TOR daemon.
 
-In this case my icinga daemon can execute the check locally.
+In this case my icinga daemon can locally execute the check and set the host manually by a command argument.
 
 ### Step 4: Make it available for Icinga 2
 
 #### Step 4.1: Create a CheckCommand object
 
-Navigate on your Icinga 2 server to your config folder, e.g.: `/etc/icinga2/conf.d` and open the `commands.conf` file.
+Navigate on your Icinga server to your config folder, e.g.: `/etc/icinga2/conf.d` and open the `commands.conf` file.
 Place this piece of code into it:
 
 ```
@@ -107,12 +112,10 @@ object Host "proxy" {
 
 object Service "tor" {
         host_name = "proxy"
-        display_name = "TOR connection"
+        display_name = "TOR status"
 
         check_command = "tor"
         check_interval = 1h
-
-        vars.tor_host = "proxy.veloc1ty.lan"
 }
 ```
 
@@ -128,10 +131,11 @@ If you want to add it to multiple hosts work with `apply`!
 
 ## Check connection based on a hidden service
 
-The check is fetching the TOR project website from the "normal" web by default.
+You can "misuse" this plugin to check the reachability of an .onion hidden service, too.
+I highly do not recommend this. TOR hidden service descriptions shared in the network have an expiry date.
 
-You can also define a hidden service (.onion) if you want. Just set the `tor_target` variable.
-With this option you can also monitor the reachability of a hidden service.
+In some circumstances this plugin will tell you that a hidden service is up even than it isn't. You would have to patch this script to rebuild all TOR circuits before the request is sent out to achieve "good" check results. You also have to reduce the check interval.
+I'm currently developing another check plugin just for this case so please be patient. That's more complex than just doing a HTTP HEAD request.
 
 ## Performance data
 

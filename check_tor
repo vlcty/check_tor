@@ -35,26 +35,20 @@ sub main {
 }
 
 sub fetchTarget {
-	my $userAgent = LWP::UserAgent->new(
-		agent => 'check_tor connection check'
-	);
-
-	$userAgent->proxy(
-		['http', 'https'],
-		"socks://$TOR_HOST:$TOR_PORT"
-		);
-	$userAgent->timeout(10);
+	my $userAgent = prepare_user_agent();
 
 	my $startTime = time;
+	my $response = $userAgent->head($TARGET);
+	my $endTime = time;
 
-	decide_exit_code($userAgent->head($TARGET),
-		$startTime);
+	decide_exit_code($response,
+		calculate_delay($endTime,
+			$startTime));
 }
 
 sub decide_exit_code {
-	my ( $response, $startTime ) = @_;
-	my $delay = calculate_delay($startTime);
-	$delay = build_latency_string($delay);
+	my ( $response, $delay ) = @_;
+	$delay = "|latency=" . $delay . "ms\n";
 
 	if ( $response->is_success ) {
 		print("OK - TOR connection is up" . $delay);
@@ -73,14 +67,24 @@ sub decide_exit_code {
 	}
 }
 
-sub build_latency_string {
-	my $delay = shift;
-	return "|latency=" . $delay . "ms\n";
+sub prepare_user_agent {
+	my $userAgent = LWP::UserAgent->new(
+		agent => 'check_tor check for nagions/icinga'
+	);
+
+	$userAgent->proxy(
+		['http', 'https'],
+		"socks://$TOR_HOST:$TOR_PORT"
+		);
+
+	$userAgent->timeout(10);
+
+	return $userAgent;
 }
 
 sub calculate_delay {
-	my $startTime = shift;
-	return sprintf("%.4f", ( time - $startTime ) * 1000 );
+	my ( $endTime, $startTime ) = @_;
+	return sprintf("%.4f", ( $endTime - $startTime ) * 1000 );
 }
 
 sub parse_options {
@@ -88,6 +92,7 @@ sub parse_options {
 		"host=s" => \$TOR_HOST,
 		"port=i" => \$TOR_PORT,
 		"target=s" => \$TARGET,
+		"help" => \&print_help
 		);
 
 	exit_unknown("--host argument is invalid") if ( length($TOR_HOST) == 0);
@@ -101,3 +106,18 @@ sub exit_unknown {
 	exit 3;
 }
 
+sub print_help {
+	print << "END_MESSAGE";
+check_tor - Check if your TOR daemon is still connected to the network
+Copyright (c) 2015 Josef 'veloc1ty' Stautner (hello\@veloc1ty.de)
+
+Usage:
+	--host   = IP-Address or hostname. Default: $TOR_HOST
+	--port   = Set the port. Default: $TOR_PORT
+	--target = Website to fetch
+	--help   = Print this message
+
+END_MESSAGE
+
+	exit 3;
+}
